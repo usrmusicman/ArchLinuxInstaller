@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+
+# Exit on error
+set -e
+
+# --- USER DETECTION ---
+REAL_USER=${SUDO_USER:-$USER}
+
+# --- DEFAULT SWITCH STATES ---
+INSTALL_BASE=false
+GPU1="none"
+GPU2="none"
+ENABLE_FLATHUB=false
+ENABLE_OPTIMIZE=false
+
+# --- PACKAGE GROUPS ---
+POST_INSTALL="7zip alsa-utils bzip2 bzip3 cachyos-lavender-kde-theme-git cachyos-sysctl-manager discover dosfstools exfatprogs fatresize flatpak ffmpeg gamemode gamescope gst-libav gst-plugins-bad gst-plugins-bad-libs gst-plugins-base gst-plugins-base-libs gst-plugins-espeak gst-plugins-good gst-plugins-ugly icoutils ifuse ksshaskpass lib32-gamemode lib32-mangohud lib32-pipewire-jack lib32-pipewire-v4l2 libcurl-compat libcurl-gnutls libgpod mangohud ntfs-3g pipewire pipewire-alsa pipewire-audio pipewire-jack pipewire-v4l2 plasma-meta plymouth protontricks pulsemixer realtime-privileges scx-scheds scx-tools steam steam-devices umu-launcher unrar unzip vulkan-tools wireplumber zip"
+
+AMDGPU_DRV="lib32-libva-mesa-driver lib32-opencl-mesa lib32-vulkan-radeon libva-mesa-driver opencl-mesa rocm-hip-runtime rocm-opencl-runtime rocminfo vulkan-radeon"
+INTELGPU_DRV="intel-compute-runtime intel-media-driver lib32-vulkan-intel vpl-gpu-rt vulkan-intel"
+NVIDIA_PROB="lib32-nvidia-utils lib32-opencl-nvidia libva-nvidia-driver libvdpau-va-gl nvidia-open-dkms nvidia-prime nvidia-settings nvidia-utils nvtop opencl-nvidia vdpauinfo"
+NVIDIA_NVK="lib32-mesa-vulkan-layers lib32-vulkan-nouveau mesa-vulkan-layers vulkan-nouveau"
+
+NVIDIA_PROB_SVCS=("nvidia-hibernate.service" "nvidia-persistenced.service" "nvidia-powerd.service" "nvidia-resume.service" "nvidia-suspend.service" "nvidia-suspend-then-hibernate.service")
+
+TARGET_SERVICES=("systemd-networkd.service"
+                 "systemd-networkd.socket"
+                 "systemd-homed.service"
+                 "systemd-userdbd.socket"
+                 "systemd-journal-remote.service"
+                 "systemd-journal-upload.service"
+                 "systemd-journal-gatewayd.service"
+                 "systemd-pcrlock.service")
+
+# --- HELP MENU ---
+usage() {
+    echo "Usage: sudo $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  --base                          Install base system packages (Media, Steam, Tools)"
+    echo "  --gpu1 [amd|intel|nvidia|nvk]   Set primary GPU driver"
+    echo "  --gpu2 [amd|intel|nvidia|nvk]   Set secondary GPU driver"
+    echo "  --flathub                       Enable Flatpak and Flathub repository"
+    echo "  --optimize                      Disable targeted systemd services"
+    echo "  --all                           Run all modules (Base + Flathub + Optimize)"
+    echo "  --help                          Show this help message"
+    echo ""
+    echo "Example: sudo $0 --base --gpu1 amd --flathub"
+    exit 1
+}
+
+# --- ARGUMENT PARSING ---
+if [[ $# -eq 0 ]]; then usage; fi
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --base) INSTALL_BASE=true; shift ;;
+        --gpu1) GPU1="$2"; shift 2 ;;
+        --gpu2) GPU2="$2"; shift 2 ;;
+        --flathub) ENABLE_FLATHUB=true; shift ;;
+        --optimize) ENABLE_OPTIMIZE=true; shift ;;
+        --all) INSTALL_BASE=true; ENABLE_FLATHUB=true; ENABLE_OPTIMIZE=true; shift ;;
+        --help) usage ;;
+        *) echo "Unknown option: $1"; usage ;;
+    esac
+done
+
+# --- GPU INSTALLATION FUNCTION ---
+install_gpu() {
+    local TYPE=$1
+    local SLOT=$2
+    case "$TYPE" in
+        amd)
+            echo ":: Installing AMD Drivers (Slot $SLOT)..."
+            sudo pacman -S --needed --noconfirm $AMDGPU_DRV ;;
+        intel)
+            echo ":: Installing Intel Drivers (Slot $SLOT)..."
+            sudo pacman -S --needed --noconfirm $INTELGPU_DRV ;;
+        nvidia)
+            echo ":: Installing NVIDIA Proprietary (Slot $SLOT)..."
+            sudo pacman -S --needed --noconfirm $NVIDIA_PROB
+            sudo systemctl enable "${NVIDIA_PROB_SVCS[@]}" ;;
+        nvk)
+            echo ":: Installing NVK Open Source (Slot $SLOT)..."
+            sudo pacman -Rs --noconfirm nvidia-utils nvidia-settings nvidia-prime 2>/dev/null || true
+            for svc in "${NVIDIA_PROB_SVCS[@]}"; do sudo systemctl disable --now "$svc" >/dev/null 2>&1 || true; done
+            sudo pacman -S --needed --noconfirm $NVIDIA_NVK
+            if ! grep -q "NVK_I_WANT_NVK_FLAGS" /etc/environment; then
+                echo "NVK_I_WANT_NVK_FLAGS=1" | sudo tee -a /etc/environment
+            fi ;;
+        none) ;;
+        *) echo "!! Invalid GPU type: $TYPE"; exit 1 ;;
+    esac
+}
+
+# --- 1. PRE-INSTALL ---
+if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
+    echo ":: Enabling multilib..."
+    echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" | sudo tee -a /etc/pacman.conf
+    sudo pacman -Sy
+fi
+
+# --- 2. BASE INSTALLATION ---
+if [[ "$INSTALL_BASE" == true ]]; then
+    echo ":: Installing base packages..."
+    sudo pacman -S --needed --noconfirm $POST_INSTALL
+fi
+
+# --- 3. GPU DRIVERS ---
+install_gpu "$GPU1" "1"
+install_gpu "$GPU2" "2"
+
+# --- 4. FLATPAK ---
+if [[ "$ENABLE_FLATHUB" == true ]]; then
+    echo ":: Configuring Flathub..."
+    # Ensure flatpak is installed even if --base wasn't used
+    sudo pacman -S --noconfirm --needed flatpak
+    sudo -u "$REAL_USER" flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+fi
+
+# --- 5. SERVICE OPTIMIZATION ---
+if [[ "$ENABLE_OPTIMIZE" == true ]]; then
+    echo ":: Disabling targeted systemd services..."
+    for SERVICE in "${TARGET_SERVICES[@]}"; do
+        if systemctl list-unit-files "$SERVICE" >/dev/null 2>&1; then
+            sudo systemctl disable --now "$SERVICE"
+        fi
+    done
+fi
+
+# --- 6. FINALIZING ---
+if grep -q "^realtime:" /etc/group; then
+    sudo usermod -aG realtime "$REAL_USER"
+fi
+
+echo ":: Setup complete! Please REBOOT."
