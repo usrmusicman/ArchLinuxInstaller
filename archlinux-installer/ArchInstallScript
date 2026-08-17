@@ -516,7 +516,7 @@ setup_kernel_cmdline() {
 
     # Create efi commandline params script
     echo "#!/bin/env bash" > "$CHROOT_DIR"/usr/local/bin/cmdline_config
-    echo "export CMDLINE+=\"root=UUID=$ROOT_UUID rw zswap.enabled=0 quiet splash nowatchdog\"" >> "$CHROOT_DIR"/usr/local/bin/cmdline_config
+    echo "export CMDLINE+=\"root=UUID=$ROOT_UUID rw zswap.enabled=0 quiet splash nowatchdog \"" >> "$CHROOT_DIR"/usr/local/bin/cmdline_config
     chmod +x "$CHROOT_DIR"/usr/local/bin/cmdline_config
 
     # Create efi commandline execution script
@@ -597,7 +597,7 @@ setup_pro_audio() {
     arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME realtime
 
     # Add a line to the cmdline configuration tool for the pro audio boot kernel options
-    echo "export CMDLINE+=\"mitigations=off pcie_aspm=off threadirqs usbcore.autosuspend=-1\"" >> "$CHROOT_DIR"/usr/local/bin/cmdline_config
+    echo "export CMDLINE+=\"mitigations=off pcie_aspm=off threadirqs usbcore.autosuspend=-1 \"" >> "$CHROOT_DIR"/usr/local/bin/cmdline_config
 
     # Launch the update_cmdline script
     arch-chroot "$CHROOT_DIR" /usr/local/bin/update_cmdline
