@@ -48,31 +48,6 @@ make_kernel_image() {
     rm -f "${ESP_MOUNT}/initramfs-${KERNEL_VERSION}.img"
 }
 
-configure_secure_boot() {
-    echo "==> Configuring Secure Boot..."
-
-    # 1. Ensure keys exist (only runs if keys aren't already initialized)
-    if [[ ! -f "/var/lib/sbctl/db" ]]; then
-        sbctl create-keys
-    fi
-
-    # 2. Check if keys are enrolled
-    if ! sbctl status | grep -q "Setup Mode: Disabled"; then
-        echo "!! Warning: System is in Setup Mode. Enrolling keys..."
-        sbctl enroll-keys --microsoft
-    fi
-
-    # 3. Sign the UKI and add to database for auto-signing
-    # The -s flag saves the file to the sbctl database for future re-signs
-    if [[ -f "$UKI_FILE" ]]; then
-        echo "==> Signing $UKI_FILE..."
-        sbctl sign -s "$UKI_FILE"
-    else
-        echo "Error: UKI not found at $UKI_FILE. Signing failed."
-        exit 1
-    fi
-}
-
 bootloader_config() {
     echo "==> Configuring UEFI boot entry..."
 
@@ -92,7 +67,6 @@ bootloader_config() {
 # --- EXECUTION ---
 setup_preset
 make_kernel_image
-configure_secure_boot
 bootloader_config
 
 echo "==> Success! Boot entry for $KERNEL_VERSION created and signed."

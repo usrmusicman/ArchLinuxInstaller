@@ -16,19 +16,12 @@ fi
 # Validation: Ensure critical variables aren't empty
 : "${INSTALL_DISK:?Variable not set}"
 : "${BOOT_PARTITION:?Variable not set}"
+: "${OS_NAME:?Variable not set}"
 : "${ROOT_PARTITION:?Variable not set}"
 : "${USERNAME:?Variable not set}"
 
-# GPU Drivers
-AMDGPU_DRV="lib32-vulkan-mesa-implicit-layers lib32-vulkan-mesa-layers lib32-opencl-mesa lib32-vulkan-radeon libva-utils opencl-mesa rocm-hip-runtime rocm-opencl-runtime rocminfo vulkan-mesa-implicit-layers vulkan-mesa-layers vulkan-radeon"
-INTELGPU_DRV="intel-compute-runtime intel-media-driver libva-utils lib32-vulkan-mesa-implicit-layers lib32-vulkan-mesa-layers lib32-vulkan-intel vpl-gpu-rt vulkan-intel vulkan-mesa-implicit-layers vulkan-mesa-layers"
-NVIDIA_PRO_DRV="lib32-nvidia-utils lib32-opencl-nvidia libva-nvidia-driver libvdpau-va-gl nvidia-open-dkms nvidia-prime nvidia-settings nvidia-container-toolkit nvidia-utils nvtop opencl-nvidia vdpauinfo"
-NVIDIA_NVK="lib32-opencl-mesa lib32-vulkan-mesa-implicit-layers lib32-vulkan-mesa-layers lib32-vulkan-nouveau opencl-mesa vulkan-mesa-implicit-layers vulkan-mesa-layers vulkan-nouveau"
-
-# Base Package List
-PACKAGES="7zip ark bash-completion bluez bluez-cups bluez-hid2hci bluez-libs bluez-obex bluez-utils breeze5 cups cups-browsed dolphin dolphin-plugins exfatprogs ffmpeg ffmpeg4.4 ffmpegthumbs firefox firefox-i18n-en-us flatpak fwupd gamemode gamescope git git-lfs gst-libav gst-plugin-pipewire gst-plugins-bad gst-plugins-bad-libs gst-plugins-base gst-plugins-base-libs gst-plugins-espeak gst-plugins-good gst-plugins-ugly gwenview icoutils ifuse iproute2 irqbalance kaccounts-integration kate kcalc kdeconnect kdegraphics-mobipocket kdegraphics-thumbnailers kdialog keditbookmarks kio-admin kio-extras kio-fuse konsole ksshaskpass less lib32-gamemode lib32-libcurl-compat lib32-libcurl-gnutls lib32-mangohud lib32-pipewire-jack lib32-pipewire-v4l2 libcurl-compat libcurl-gnutls libdvdcss libnvidia-container libgpod lsb-release man-db man-pages man-pages-utils mangohud mpv multilib-devel networkmanager networkmanager-vpn-plugin-openvpn noto-fonts noto-fonts-cjk noto-fonts-emoji nss-mdns ntfs-3g openssh orca partitionmanager phonon-qt6-vlc pipewire-audio pipewire-jack pipewire-v4l2 print-manager plasma-meta plymouth plymouth-kcm power-profiles-daemon pulsemixer realtime-privileges reflector steam steam-devices system-config-printer umu-launcher unrar unzip vi vim vlc vulkan-tools yt-dlp zip zram-generator"
-
 add_user() {
+
     echo "Add User..."
 
     # Add the user first
@@ -46,35 +39,25 @@ add_user() {
     chattr +F "$USER_HOME/.wine"
     chattr +F "$USER_HOME/Games"
 
-    # Set password
-    echo "$USERNAME:$PASSWORD" | arch-chroot "$CHROOT_DIR" chpasswd
-
     # Enable sudo
-    echo '%wheel ALL=(ALL:ALL) ALL' > "$CHROOT_DIR/etc/sudoers.d/wheel"
-    chmod 440 "$CHROOT_DIR/etc/sudoers.d/wheel"
-
-    # Unsset Password
-    unset PASSWORD
+    echo '%wheel ALL=(ALL:ALL) ALL' > "$CHROOT_DIR/etc/sudoers.d/0-wheel"
+    chmod 440 "$CHROOT_DIR/etc/sudoers.d/0-wheel"
 
     # Ensure the user actually owns their home folder after we made root-owned subdirs
     arch-chroot "$CHROOT_DIR" chown -R "$USERNAME:$USERNAME" "/home/$USERNAME"
-}
 
-configure_avahi() {
-    echo "Configuring Avahi mDNS..."
-
-    # Configure NSS Switch to use mdns_minimal
-    # This allows .local resolution
-    sed -i 's/hosts: mymachines/hosts: mymachines mdns_minimal [NOTFOUND=return]/' "$CHROOT_DIR"/etc/nsswitch.conf
 }
 
 configure_hostname() {
+
     echo "Configure Compter Name..."
 
     echo "$HOSTNAME" > "$CHROOT_DIR"/etc/hostname
+
 }
 
 configure_keyboard() {
+
     echo "Setting keyboard layout to: $KEYMAP"
 
     # 1. Set the layout for the CURRENT live session immediately
@@ -102,9 +85,11 @@ Section "InputClass"
         Option "XkbLayout" "$X11_LAYOUT"
 EndSection
 EOF
+
 }
 
 configure_locale() {
+
     echo "Configure System Locale..."
 
     # Set fallback if input is empty
@@ -134,9 +119,11 @@ configure_locale() {
     echo "LANG=$USER_LOCALE" > "$CHROOT_DIR/etc/locale.conf"
 
     echo "Locale set successfully."
+
 }
 
 configure_mirrors() {
+
     echo "Optimizing mirrorlist for $MIRROR_COUNTRY..."
 
     # Ensure reflector is available on the live ISO
@@ -150,9 +137,11 @@ configure_mirrors() {
     # --latest 20: Looks at the 20 most recently synced
     # --sort rate: Picks the fastest among them
     reflector --country "$MIRROR_COUNTRY" --age 12 --protocol https --latest 20 --number 5 --sort rate --save /etc/pacman.d/mirrorlist
+
 }
 
 configure_mkinitcpio() {
+
     echo "Creating mkinitcpio drop-in configurations..."
 
     mkdir -p "$CHROOT_DIR/etc/mkinitcpio.conf.d"
@@ -168,9 +157,11 @@ EOF
     else
         echo "No Nvidia GPU detected. Skipping nvidia.conf..."
     fi
+
 }
 
 configure_mkinitcpio_uki_preset() {
+
     echo "Setting up mkinitcpio UKI preset..."
 
     local PRESET_FILE="$CHROOT_DIR/etc/mkinitcpio.d/${KERNEL}.preset"
@@ -192,17 +183,21 @@ PRESETS=('default')
 default_uki="$EFI_DIR/${KERNEL}.efi"
 default_options="--cmdline /etc/kernel/cmdline"
 EOF
+
 }
 
 configure_ntp() {
+
     echo "Enabling Network Time Synchronization (NTP)..."
 
     # Enable systemd-timesyncd
     # This is much lighter than chrony or ntpd for a gaming/workstation build
     arch-chroot "$CHROOT_DIR" systemctl enable systemd-timesyncd.service
+
 }
 
 configure_pacman_makepkg() {
+
     echo "Tuning Pacman and Makepkg configurations..."
 
     # 1. Enable Multilib in pacman.conf
@@ -219,33 +214,11 @@ configure_pacman_makepkg() {
     local CORES=$(nproc)
     sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j$CORES\"/" "$CHROOT_DIR/etc/makepkg.conf"
     sed -i 's/COMPRESSZST=(zstd -c -z -q -)/COMPRESSZST=(zstd -c -z -q --threads=0 -)/' "$CHROOT_DIR/etc/makepkg.conf"
-}
 
-configure_secure_boot() {
-    echo "Initializing Secure Boot keys and signing UKI..."
-
-    # 1. Create the keys
-    arch-chroot "$CHROOT_DIR" sbctl create-keys
-
-    # 2. Enroll keys. The --microsoft flag is vital for keeping
-    # compatibility with firmware/hardware signed by MS.
-    if arch-chroot "$CHROOT_DIR" sbctl enroll-keys --microsoft; then
-        echo "Keys enrolled successfully."
-    else
-        echo "!! Warning: Enrollment failed. You must set BIOS to 'Setup Mode' (Clear Keys) to enroll."
-    fi
-
-    # 3. Sign the UKI and save to the database for automatic re-signing
-    local UKI_PATH="/$BOOTLOADER_PATH/EFI/Linux/${KERNEL}.efi"
-    if [[ -f "${CHROOT_DIR}${UKI_PATH}" ]]; then
-        echo "Signing $UKI_PATH..."
-        arch-chroot "$CHROOT_DIR" sbctl sign -s "$UKI_PATH"
-    else
-        echo "Error: UKI not found at $UKI_PATH. Signing skipped."
-    fi
 }
 
 configure_timezone() {
+
     echo "Configure Timezone..."
 
     # Use fallback if global variable is empty
@@ -262,25 +235,11 @@ configure_timezone() {
         echo "!! Error: Timezone $FINAL_ZONE not found. Defaulting to UTC."
         arch-chroot "$CHROOT_DIR" ln -sf /usr/share/zoneinfo/UTC /etc/localtime
     fi
-}
 
-configure_user_groups() {
-    echo "Configuring User Group Permissions..."
-
-    # audio/video: Hardware acceleration & interfaces
-    # games/input: Controllers, high-poll mice, and drawing tablets
-    # realtime: Low-latency scheduling for the Zen kernel
-    # flatpak: Sandboxed app management
-    # cups: Local printer administration
-    local USER_GROUPS="audio,video,games,realtime,flatpak,cups,input,render"
-
-    echo "Adding $USERNAME to: $USER_GROUPS"
-
-    # Append groups to the user (ensuring 'wheel' and others remain)
-    arch-chroot "$CHROOT_DIR" usermod -aG "$USER_GROUPS" "$USERNAME"
 }
 
 create_partitions() {
+
     echo "Formatting Partitions..."
 
     # Format Boot (FAT32 for EFI)
@@ -290,10 +249,12 @@ create_partitions() {
     # Format Root (EXT4 with Casefold)
     # Adding -F to force format without interaction
     mkfs.ext4 -F -b 4096 -E lazy_itable_init=1 -O casefold -m 1 "$ROOT_PARTITION"
-    e2label "$ROOT_PARTITION" "Archlinux"
+    e2label "$ROOT_PARTITION" "$OS_NAME"
+
 }
 
-disable_services() {
+disable_heavy_services() {
+
     echo "Masking unneeded services (The Nuclear Option)..."
     # We use mask instead of disable to prevent these from being
     # started as dependencies by other packages.
@@ -311,26 +272,18 @@ disable_services() {
     for svc in "${SERVICES[@]}"; do
         arch-chroot "$CHROOT_DIR" systemctl mask "$svc" >/dev/null 2>&1 || true
     done
+
 }
 
-enable_services() {
-    echo "Enabling System Services..."
-    # Desktop & Network
-    # Using plasmalogin.service as per latest Arch/Plasma Wayland standards
-    arch-chroot "$CHROOT_DIR" systemctl enable plasmalogin.service
-    arch-chroot "$CHROOT_DIR" systemctl enable NetworkManager.service
-    arch-chroot "$CHROOT_DIR" systemctl enable bluetooth.service
+enter_chroot() {
 
-    # Printing & Discovery
-    arch-chroot "$CHROOT_DIR" systemctl enable avahi-daemon.service
-    arch-chroot "$CHROOT_DIR" systemctl enable cups.service
-    arch-chroot "$CHROOT_DIR" systemctl enable cups-browsed.service
+    # Enter newly installed system chroot environment
+    arch-chroot "$CHROOT_DIR"
 
-    # Performance & Audio
-    arch-chroot "$CHROOT_DIR" systemctl enable irqbalance.service
 }
 
 finalize_uki() {
+
     echo "Generating Unified Kernel Image (UKI) via mkinitcpio..."
 
     # Remove the default images if they were created during pacstrap
@@ -339,57 +292,11 @@ finalize_uki() {
 
     # Build only what is in our new preset (the UKI)
     arch-chroot "$CHROOT_DIR" mkinitcpio -p ${KERNEL}
-}
 
-install_archlinux() {
-    echo "Install Archlinux..."
-    # Added 'dkms' to ensure nvidia-open-dkms can build and be signed
-    pacstrap "$CHROOT_DIR" binutils base base-devel dosfstools mkinitcpio systemd-ukify e2fsprogs efibootmgr linux-firmware ${KERNEL} ${KERNEL}-headers sbctl sbsigntools dkms
-
-    cp /etc/pacman.d/mirrorlist "$CHROOT_DIR"/etc/pacman.d/mirrorlist
-    arch-chroot "$CHROOT_DIR" pacman-key --init
-    arch-chroot "$CHROOT_DIR" pacman-key --populate archlinux
-
-    echo "Install efibootmgr efistub enhanced script"
-    cp efistub_generator $CHROOT_DIR/usr/local/bin
-}
-
-install_base_pkgs() {
-    echo "Install Base Packages..."
-
-    # Install System Packages
-    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm $PACKAGES
-}
-
-install_chaotic_aur() {
-    if [[ "$USE_CHAOTIC" =~ ^[Yy]$ ]]; then
-        echo "Installing Chaotic-AUR..."
-
-        # 1. Receive the primary key
-        CHAOTIC_KEYRING="3056513887B78AEB"
-        arch-chroot "$CHROOT_DIR" pacman-key --recv-key $CHAOTIC_KEYRING --keyserver keyserver.ubuntu.com
-        arch-chroot "$CHROOT_DIR" pacman-key --lsign-key $CHAOTIC_KEYRING
-
-        # 2. Install the keyring and mirrorlist
-        arch-chroot "$CHROOT_DIR" pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst'
-        arch-chroot "$CHROOT_DIR" pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
-
-        # 3. Add to pacman.conf
-        {
-            echo ""
-            echo "[chaotic-aur]"
-            echo "Include = /etc/pacman.d/chaotic-mirrorlist"
-        } >> "$CHROOT_DIR/etc/pacman.conf"
-
-        # Intialize Chaotic Keyring
-        pacman-key --populate chaotic
-
-        # Refresh database
-        arch-chroot "$CHROOT_DIR" pacman -Sy --noconfirm
-    fi
 }
 
 install_cpu_firmware() {
+
     echo "Install CPU Firmware..."
 
     # Install CPU firmware
@@ -400,40 +307,65 @@ install_cpu_firmware() {
     else
         echo "No CPU Detected"
     fi
+
 }
 
 install_gpu_driver() {
-    echo "GPUO=$GPU0"
-    echo "GPU1=$GPU1"
-    echo "NVIDIA_PRO_DRV=$NVIDIA_PRO_DRV"
 
+    # Update System
     arch-chroot "$CHROOT_DIR" pacman -Sy
 
-    case "$GPU0" in
-        amd) arch-chroot "$CHROOT_DIR" pacman -S --noconfirm $AMDGPU_DRV ;;
-        intel) arch-chroot "$CHROOT_DIR" pacman -S --noconfirm $INTELGPU_DRV ;;
-        nvidia) arch-chroot "$CHROOT_DIR" pacman -S --noconfirm $NVIDIA_PRO_DRV ;;
-        nvidia_foss) arch-chroot "$CHROOT_DIR" pacman -S --noconfirm $NVIDIA_NVK ;;
-        *) echo "No primary GPU detected" ;;
-    esac
+    if [[ "$GPU0" == "amd" ]] || [[ "$GPU1" == "amd" ]]; then
 
-    case "$GPU1" in
-        amd) arch-chroot "$CHROOT_DIR" pacman -S --noconfirm $AMDGPU_DRV ;;
-        intel) arch-chroot "$CHROOT_DIR" pacman -S --noconfirm $INTELGPU_DRV ;;
-        nvidia) arch-chroot "$CHROOT_DIR" pacman -S --noconfirm $NVIDIA_PRO_DRV ;;
-        nvidia_foss) arch-chroot "$CHROOT_DIR" pacman -S --noconfirm $NVIDIA_NVK ;;
-        *) echo "No secondary GPU detected" ;;
-    esac
+        # AMD GPU
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm libva-utils opencl-mesa rocm-hip-runtime rocm-opencl-runtime rocminfo vulkan-mesa-implicit-layers vulkan-mesa-layers vulkan-radeon
+
+        # AMD GPU (32-bit)
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-vulkan-mesa-implicit-layers lib32-vulkan-mesa-layers lib32-opencl-mesa lib32-vulkan-radeon
+
+    elif [[ "$GPU0" == "intel" ]] || [[ "$GPU1" == "intel" ]]; then
+
+        # Intel GPU
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm intel-compute-runtime intel-media-driver libva-utils vpl-gpu-rt vulkan-intel vulkan-mesa-implicit-layers vulkan-mesa-layers
+
+        # Intel GPU (32-bit)
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-vulkan-mesa-implicit-layers lib32-vulkan-mesa-layers lib32-vulkan-intel
+
+    elif [[ "$GPU0" == "nvidia" ]] || [[ "$GPU1" == "nvidia" ]]; then
+
+        # Nvidia GPU
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm libnvidia-container libva-nvidia-driver libvdpau-va-gl nvidia-open-dkms nvidia-prime nvidia-settings nvidia-container-toolkit nvidia-utils nvtop opencl-nvidia vdpauinfo
+
+        # Nvidia GPU (32-bit)
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-nvidia-utils lib32-opencl-nvidia
+
+    elif [[ "$GPU0" == "nvidia_foss" ]] || [[ "$GPU1" == "nvidia_foss" ]]; then
+
+        # Nvidia GPU FOSS
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm opencl-mesa vulkan-mesa-implicit-layers vulkan-mesa-layers vulkan-nouveau
+
+        # Nvidia GPU FOSS (32-bit)
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-opencl-mesa lib32-vulkan-mesa-implicit-layers lib32-vulkan-mesa-layers lib32-vulkan-nouveau
+
+    else
+
+        echo "No GPU Detected...."
+
+    fi
+
 }
 
 generate_fstab() {
+
     echo "Install FSTAB..."
 
     # Generate FSTAB
     genfstab -U "$CHROOT_DIR" > "$CHROOT_DIR"/etc/fstab
+
 }
 
 mount_partitions() {
+
     echo "Mount Partitions..."
 
     # Ensure the directory exists first
@@ -445,9 +377,11 @@ mount_partitions() {
     # Mount Boot
     mkdir -p "$CHROOT_DIR/$BOOTLOADER_PATH"
     mount "$BOOT_PARTITION" "$CHROOT_DIR/$BOOTLOADER_PATH"
+
 }
 
 partition_disk() {
+
     echo "Verifying partitions..."
 
     # Check if the physical disk exists
@@ -464,14 +398,16 @@ partition_disk() {
     fi
 
     echo "Partitions verified. Proceeding to formatting..."
+
 }
 
 register_efistub() {
+
     echo "Registering UKI with UEFI Boot Manager..."
 
     # 1. Clean up old entries to avoid BIOS clutter
     # This finds the hex ID (e.g., 0001) for any entry labeled "Arch ${KERNEL}"
-    local OLD_ENTRY=$(arch-chroot "$CHROOT_DIR" efibootmgr | grep "Arch ${KERNEL}" | getconf ARG_MAX=1 | awk '{print $1}' | sed 's/Boot//;s/\*//')
+    local OLD_ENTRY=$(arch-chroot "$CHROOT_DIR" efibootmgr | grep "Arch ${KERNEL}" | head -n 1 | awk '{print $1}' | sed 's/Boot//;s/\*//')
 
     if [[ -n "$OLD_ENTRY" ]]; then
         echo "Removing old UEFI entry $OLD_ENTRY..."
@@ -490,28 +426,200 @@ register_efistub() {
         --label "Arch ${KERNEL}" \
         --loader "\\EFI\\Linux\\${KERNEL}.efi" \
         --unicode
+
+}
+
+setup_archlinux() {
+
+    # Setup welcome message
+    echo "Setup Archlinux..."
+
+    # Core packages to install
+    pacstrap "$CHROOT_DIR" avahi binutils base base-devel curl dkms dosfstools e2fsprogs efibootmgr git less linux-firmware ${KERNEL} ${KERNEL}-headers man-db man-pages man-pages-utils mkinitcpio nss-mdns plymouth reflector zram-generator
+
+    # Mirrorlist And Keys
+    cp /etc/pacman.d/mirrorlist "$CHROOT_DIR"/etc/pacman.d/mirrorlist
+    arch-chroot "$CHROOT_DIR" pacman-key --init
+    arch-chroot "$CHROOT_DIR" pacman-key --populate archlinux
+
+    # EFIStub Generator
+    echo "Install efibootmgr efistub enhanced script"
+    cp efistub_generator $CHROOT_DIR/usr/local/bin
+
+    # Network Discovery
+    arch-chroot "$CHROOT_DIR" systemctl enable avahi-daemon.service
+
+    # Configure NSS Switch to use mdns_minimal
+    sed -i 's/hosts: mymachines/hosts: mymachines mdns_minimal [NOTFOUND=return]/' "$CHROOT_DIR"/etc/nsswitch.conf
+
+}
+
+setup_base() {
+
+    # Setup welcome message
+    echo "Setup Base CLI Environment..."
+
+    # Update System
+    arch-chroot "$CHROOT_DIR" pacman -Sy
+
+    # Install System Packages
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm 7zip bash-completion bluez bluez-cups bluez-hid2hci bluez-libs bluez-obex bluez-utils exfatprogs ffmpeg flatpak fwupd gst-libav gst-plugin-pipewire gst-plugins-bad gst-plugins-bad-libs gst-plugins-base gst-plugins-base-libs gst-plugins-espeak gst-plugins-good gst-plugins-ugly ifuse iproute2 irqbalance libcurl-compat libcurl-gnutls libdvdcss libgpod lsb-release networkmanager networkmanager-vpn-plugin-openvpn noto-fonts noto-fonts-cjk noto-fonts-emoji ntfs-3g openssh pipewire-alsa pipewire-audio pipewire-ffado pipewire-libcamera pipewire-pulse pipewire-session-manager pipewire-v4l2 power-profiles-daemon unrar unzip wiremix vi vim zip
+
+    # Install System Packages (32-bit)
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-libcurl-compat lib32-libcurl-gnutls lib32-pipewire-v4l2 multilib-devel
+
+    # Enable networking and bluetooth
+    arch-chroot "$CHROOT_DIR" systemctl enable NetworkManager.service
+    arch-chroot "$CHROOT_DIR" systemctl enable bluetooth.service
+
+    # Add users to the appropriate groups
+    arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME audio
+    arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME flatpak
+    arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME input
+    arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME render
+    arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME video
+
+}
+
+setup_gaming_environment() {
+
+    # Setup welcome message
+    echo "Setup Gaming Environment..."
+
+    # Update System
+    arch-chroot "$CHROOT_DIR" pacman -Sy
+
+    # Install Gaming Packages
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm gamemode gamescope mangohud openrgb steam steam-devices umu-launcher
+
+    # Install GPU driver tunable frontends
+    if [[ "$GPU0" == "amd" ]] || [[ "$GPU1" == "amd" ]]; then
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lact
+        arch-chroot "$CHROOT_DIR" systemctl enable --now lactd.service
+    fi
+
+    # Install Gaming Packages (32-bit)
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-gamemode lib32-mangohud
+
+    # Add users to the appropriate groups
+    arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME games
+
 }
 
 setup_kernel_cmdline() {
+
+    # Setup welcome message
     echo "Setup Kernel Commandline..."
 
     # Get the UUID correctly
     local ROOT_UUID=$(blkid -s UUID -o value "$ROOT_PARTITION")
 
-    # Construct the base options
-    local CMDLINE="root=UUID=$ROOT_UUID rw threadirqs zswap.enabled=0 quiet splash"
+    # Create efi commandline params script
+    echo "#!/bin/env bash" > "$CHROOT_DIR"/usr/local/bin/cmdline_config
+    echo "export CMDLINE+=\"root=UUID=$ROOT_UUID rw zswap.enabled=0 quiet splash nowatchdog\"" >> "$CHROOT_DIR"/usr/local/bin/cmdline_config
+    chmod +x "$CHROOT_DIR"/usr/local/bin/cmdline_config
 
-    # Append Nvidia specific options if needed
-    if [[ "$GPU0" == "nvidia" || "$GPU1" == "nvidia" ]]; then
-        CMDLINE="$CMDLINE nvidia-drm.modeset=1"
-    fi
+    # Create efi commandline execution script
+    echo "#!/bin/env bash" > "$CHROOT_DIR"/usr/local/bin/update_cmdline
+    echo "source /usr/local/bin/cmdline_config" >> "$CHROOT_DIR"/usr/local/bin/update_cmdline
+    echo "mkdir -p /etc/kernel" >> "$CHROOT_DIR"/usr/local/bin/update_cmdline
+    echo "echo \"\$CMDLINE\" > /etc/kernel/cmdline" >> "$CHROOT_DIR"/usr/local/bin/update_cmdline
+    chmod +x "$CHROOT_DIR"/usr/local/bin/update_cmdline
 
-    # Write to the file dracut expects
-    mkdir -p "$CHROOT_DIR"/etc/kernel
-    echo "$CMDLINE" > "$CHROOT_DIR"/etc/kernel/cmdline
+    # Launch the update_cmdline script
+    arch-chroot "$CHROOT_DIR" /usr/local/bin/update_cmdline
+
+}
+
+setup_plasma_desktop() {
+
+    # Setup welcome message
+    echo "Setup Plasma Desktop..."
+
+    # Update System
+    arch-chroot "$CHROOT_DIR" pacman -Sy
+
+    # Install Plasma Packages
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm ark breeze5 dolphin dolphin-plugins ffmpegthumbs firefox firefox-i18n-en-us gnome-keyring gwenview icoutils kaccounts-integration kate kcalc kdeconnect kdegraphics-mobipocket kdegraphics-thumbnailers kdialog keditbookmarks kio-admin kio-extras kio-fuse konsole ksshaskpass orca partitionmanager plymouth-kcm phonon-qt6-vlc plasma-meta vlc yt-dlp
+
+    # Enable Plasma Login
+    arch-chroot "$CHROOT_DIR" systemctl enable plasmalogin.service
+
+    # Add users to the appropriate groups
+    arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME plasmalogin
+
+}
+
+setup_printing_support() {
+
+    # Setup welcome message
+    echo "Setup Printing Support..."
+
+    # Update System
+    arch-chroot "$CHROOT_DIR" pacman -Sy
+
+    # Install Printing Packages
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm cups cups-browsed system-config-printer
+
+    # Enable printing services
+    arch-chroot "$CHROOT_DIR" systemctl enable cups.service
+    arch-chroot "$CHROOT_DIR" systemctl enable cups-browsed.service
+
+    # Add users to the appropriate groups
+    arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME cups
+
+}
+
+setup_pro_audio() {
+
+    # Setup welcome message
+    echo "Setup A Pro Audio Workstation Environment..."
+
+    # Update System
+    arch-chroot "$CHROOT_DIR" pacman -Sy
+
+    # Force remove jack2 package
+    arch-chroot "$CHROOT_DIR" pacman -Rdd --noconfirm jack2
+
+    # Force remove jack2 package (32-bit)
+    arch-chroot "$CHROOT_DIR" pacman -Rdd --noconfirm lib32-jack2
+
+    # Install Pro Audio Packages
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm carla irqbalance pipewire-jack qpwgraph reapack reaper sws realtime-privileges
+
+    # Install Pro Audio Packages (32-bit)
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-pipewire-jack
+
+    # Performance & Audio
+    arch-chroot "$CHROOT_DIR" systemctl enable irqbalance.service
+
+    # Add users to the appropriate groups
+    arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME realtime
+
+    # Add a line to the cmdline configuration tool for the pro audio boot kernel options
+    echo "export CMDLINE+=\"mitigations=off pcie_aspm=off threadirqs usbcore.autosuspend=-1\"" >> "$CHROOT_DIR"/usr/local/bin/cmdline_config
+
+    # Launch the update_cmdline script
+    arch-chroot "$CHROOT_DIR" /usr/local/bin/update_cmdline
+
+}
+
+set_password() {
+
+    # Create / change password for the created user
+    arch-chroot "$CHROOT_DIR" passwd "$USERNAME"
+
+}
+
+unmount_system() {
+
+    # Unmount the newly installed system
+    umount -lf $CHROOT_DIR
+
 }
 
 zram_disk() {
+
     echo "Setup Zram..."
 
     # Install Zram Config
@@ -523,39 +631,95 @@ compression-algorithm = zstd
 swap-priority = 100
 fs-type = swap
 EOF
+
 }
 
 if [[ "$USER" == "root" ]]; then
 
-    configure_mirrors
-    partition_disk
-    create_partitions
-    mount_partitions
-    install_archlinux
-    configure_pacman_makepkg
-    install_chaotic_aur
-    generate_fstab
-    zram_disk
-    install_cpu_firmware
-    install_gpu_driver
-    install_base_pkgs
-    setup_kernel_cmdline
-    configure_mkinitcpio
-    configure_mkinitcpio_uki_preset
-    configure_avahi
-    configure_hostname
-    configure_locale
-    configure_keyboard
-    configure_timezone
-    configure_ntp
-    finalize_uki
-    configure_secure_boot
-    register_efistub
-    add_user
-    configure_user_groups
-    enable_services
-    disable_services
-
-    echo "Installation Complete! You can now reboot into your new Zen system."
+    if [[ "$1" == "--base" ]]; then
+        clear
+        install_gpu_driver
+        setup_base
+    elif [[ "$1" == "--core" ]]; then
+        clear
+        setup_archlinux
+        configure_pacman_makepkg
+        generate_fstab
+        zram_disk
+        install_cpu_firmware
+        setup_kernel_cmdline
+        configure_mkinitcpio
+        configure_mkinitcpio_uki_preset
+        configure_hostname
+        configure_locale
+        configure_keyboard
+        configure_timezone
+        configure_ntp
+        finalize_uki
+        register_efistub
+        add_user
+        echo "Installation Complete! You can now reboot into your new system."
+    elif [[ "$1" == "--chroot" ]]; then
+        clear
+        echo -e "Entering the chroot environment...\n"
+        enter_chroot
+        clear
+    elif [[ "$1" == "--gaming" ]]; then
+        clear
+        setup_gaming_environment
+        echo "Installation Complete! You have installed the gaming environment."
+    elif [[ "$1" == "--mount" ]]; then
+        clear
+        mount_partitions
+        echo "Mount Successful! You have mounted the newly installed system."
+    elif [[ "$1" == "--optimize" ]]; then
+        disable_heavy_services
+        echo "Installation Complete! You have optimized your system."
+    elif [[ "$1" == "--plasma-desktop" ]]; then
+        clear
+        setup_plasma_desktop
+        echo "Installation Complete! You have installed the Plasma desktop."
+    elif [[ "$1" == "--prepare-system" ]]; then
+        clear
+        configure_mirrors
+        partition_disk
+        create_partitions
+        mount_partitions
+        echo "Preparation Complete! You are ready to install the new system."
+    elif [[ "$1" == "--printing" ]]; then
+        clear
+        setup_printing_support
+        echo "Installation Complete! You have installed printing support."
+    elif [[ "$1" == "--pro-audio" ]]; then
+        clear
+        setup_pro_audio
+        echo "Installation Complete! You have installed the pro audio environment."
+    elif [[ "$1" == "--set-password" ]]; then
+        clear
+        set_password
+        echo "Password Changed Successfully!"
+    elif [[ "$1" == "--unmount" ]]; then
+        clear
+        unmount_system
+        echo "Unmount Successful! You have unmounted the newly installed system."
+    else
+        echo "Archlinux System Installer"
+        echo ""
+        echo "Commandline Options"
+        echo "--base: This is the base install for all use cases and acts as a CLI server."
+        echo "--core: The most bare metal install. STEP 2 OF INSTALL!"
+        echo "--chroot: Enter the newly installed system."
+        echo "--gaming: Install and configure the gaming environment."
+        echo "--prepare-system: Prepares the system for installation. STEP 1 OF INSTALL!"
+        echo "--mount: Mount the newly installed system."
+        echo "--optimize: Optimize your newly installed system."
+        echo "--plasma-desktop: Install and configure the lateest KDE Plasma desktop environment."
+        echo "--printing: Install and configure the cups printing server."
+        echo "--pro-audio: Install and configure the pro-audio environment."
+        echo "--set-password: Change password for the desired user. STEP 3 OF INSTALL!"
+        echo "--unmount: Unmount the newly installed system."
+        echo "If none of these switches are used then show this help message."
+        echo ""
+    fi
 
 fi
