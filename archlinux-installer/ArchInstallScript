@@ -435,7 +435,7 @@ setup_archlinux() {
     echo "Setup Archlinux..."
 
     # Core packages to install
-    pacstrap "$CHROOT_DIR" avahi binutils base base-devel curl dkms dosfstools e2fsprogs efibootmgr git less linux-firmware ${KERNEL} ${KERNEL}-headers man-db man-pages man-pages-utils mkinitcpio nss-mdns plymouth reflector zram-generator
+    pacstrap "$CHROOT_DIR" avahi binutils base base-devel curl dkms dosfstools e2fsprogs efibootmgr git less linux-firmware ${KERNEL} ${KERNEL}-headers man-db man-pages man-pages-utils mkinitcpio nss-mdns plymouth reflector wget zram-generator
 
     # Mirrorlist And Keys
     cp /etc/pacman.d/mirrorlist "$CHROOT_DIR"/etc/pacman.d/mirrorlist
@@ -478,6 +478,37 @@ setup_base() {
     arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME input
     arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME render
     arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME video
+
+}
+
+setup_chaotic_aur() {
+
+    # Chaotic AUR
+    if [[ "$USE_CHAOTIC" =~ ^[Yy]$ ]]; then
+        echo "Installing Chaotic-AUR..."
+
+        # 1. Receive the primary key
+        CHAOTIC_KEYRING="3056513887B78AEB"
+        arch-chroot "$CHROOT_DIR" pacman-key --recv-key $CHAOTIC_KEYRING --keyserver keyserver.ubuntu.com
+        arch-chroot "$CHROOT_DIR" pacman-key --lsign-key $CHAOTIC_KEYRING
+
+        # 2. Install the keyring and mirrorlist
+        arch-chroot "$CHROOT_DIR" pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst'
+        arch-chroot "$CHROOT_DIR" pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+
+        # 3. Add to pacman.conf
+        {
+            echo ""
+            echo "[chaotic-aur]"
+            echo "Include = /etc/pacman.d/chaotic-mirrorlist"
+        } >> "$CHROOT_DIR/etc/pacman.conf"
+
+        # Intialize Chaotic Keyring
+        pacman-key --populate chaotic
+
+        # Refresh database
+        arch-chroot "$CHROOT_DIR" pacman -Sy --noconfirm
+    fi
 
 }
 
@@ -643,6 +674,7 @@ if [[ "$USER" == "root" ]]; then
     elif [[ "$1" == "--core" ]]; then
         clear
         setup_archlinux
+        setup_chaotic_aur
         configure_pacman_makepkg
         generate_fstab
         zram_disk
