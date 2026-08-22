@@ -334,7 +334,7 @@ install_gpu_driver() {
     elif [[ "$GPU0" == "nvidia" ]] || [[ "$GPU1" == "nvidia" ]]; then
 
         # Nvidia GPU
-        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm libnvidia-container libva-nvidia-driver libvdpau-va-gl nvidia-open-dkms nvidia-prime nvidia-settings nvidia-container-toolkit nvidia-utils nvtop opencl-nvidia vdpauinfo
+        arch-chroot "$CHROOT_DIR" pacman -S --noconfirm libnvidia-container libva-nvidia-driver libvdpau-va-gl ${KERNEL}-headers nvidia-open-dkms nvidia-prime nvidia-settings nvidia-container-toolkit nvidia-utils nvtop opencl-nvidia vdpauinfo
 
         # Nvidia GPU (32-bit)
         arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-nvidia-utils lib32-opencl-nvidia
@@ -435,7 +435,7 @@ setup_archlinux() {
     echo "Setup Archlinux..."
 
     # Core packages to install
-    pacstrap "$CHROOT_DIR" avahi binutils base base-devel curl dkms dosfstools e2fsprogs efibootmgr git less linux-firmware ${KERNEL} ${KERNEL}-headers man-db man-pages man-pages-utils mkinitcpio nss-mdns plymouth reflector wget zram-generator
+    pacstrap "$CHROOT_DIR" avahi binutils base base-devel curl dosfstools e2fsprogs efibootmgr git less linux-firmware ${KERNEL} man-db man-pages man-pages-utils mkinitcpio nss-mdns plymouth reflector wget zram-generator
 
     # Mirrorlist And Keys
     cp /etc/pacman.d/mirrorlist "$CHROOT_DIR"/etc/pacman.d/mirrorlist
