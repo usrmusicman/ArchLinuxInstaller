@@ -355,6 +355,10 @@ install_gpu_driver() {
 
 }
 
+install_kernel() {
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm ${KERNEL}
+}
+
 generate_fstab() {
 
     echo "Install FSTAB..."
@@ -435,7 +439,7 @@ setup_archlinux() {
     echo "Setup Archlinux..."
 
     # Core packages to install
-    pacstrap "$CHROOT_DIR" avahi binutils base base-devel curl dosfstools e2fsprogs efibootmgr git less linux-firmware ${KERNEL} man-db man-pages man-pages-utils mkinitcpio nss-mdns plymouth reflector wget zram-generator
+    pacstrap "$CHROOT_DIR" avahi binutils base base-devel curl dosfstools e2fsprogs efibootmgr git less linux-firmware man-db man-pages man-pages-utils mkinitcpio nss-mdns plymouth reflector wget zram-generator
 
     # Mirrorlist And Keys
     cp /etc/pacman.d/mirrorlist "$CHROOT_DIR"/etc/pacman.d/mirrorlist
@@ -461,6 +465,12 @@ setup_base() {
 
     # Update System
     arch-chroot "$CHROOT_DIR" pacman -Sy
+
+    # Install Pipewire JACK module
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm pipewire-jack
+
+    # Install Pipewire JACK module (32-bit)
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-pipewire-jack
 
     # Install System Packages
     arch-chroot "$CHROOT_DIR" pacman -S --noconfirm 7zip bash-completion bluez bluez-cups bluez-hid2hci bluez-libs bluez-obex bluez-utils exfatprogs ffmpeg flatpak fwupd gst-libav gst-plugin-pipewire gst-plugins-bad gst-plugins-bad-libs gst-plugins-base gst-plugins-base-libs gst-plugins-espeak gst-plugins-good gst-plugins-ugly ifuse iproute2 irqbalance libcurl-compat libcurl-gnutls libdvdcss libgpod lsb-release networkmanager networkmanager-vpn-plugin-openvpn noto-fonts noto-fonts-cjk noto-fonts-emoji ntfs-3g openssh pipewire-alsa pipewire-audio pipewire-ffado pipewire-libcamera pipewire-pulse pipewire-session-manager pipewire-v4l2 power-profiles-daemon unrar unzip wiremix vi vim zip
@@ -497,14 +507,9 @@ setup_chaotic_aur() {
         arch-chroot "$CHROOT_DIR" pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
 
         # 3. Add to pacman.conf
-        {
-            echo ""
-            echo "[chaotic-aur]"
-            echo "Include = /etc/pacman.d/chaotic-mirrorlist"
-        } >> "$CHROOT_DIR/etc/pacman.conf"
-
-        # Intialize Chaotic Keyring
-        pacman-key --populate chaotic
+        echo "" >> "$CHROOT_DIR/etc/pacman.conf"
+        echo "[chaotic-aur]" >> "$CHROOT_DIR/etc/pacman.conf"
+        echo "Include = /etc/pacman.d/chaotic-mirrorlist" >> "$CHROOT_DIR/etc/pacman.conf"
 
         # Refresh database
         arch-chroot "$CHROOT_DIR" pacman -Sy --noconfirm
@@ -571,7 +576,7 @@ setup_plasma_desktop() {
     arch-chroot "$CHROOT_DIR" pacman -Sy
 
     # Install Plasma Packages
-    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm ark breeze5 dolphin dolphin-plugins ffmpegthumbs firefox firefox-i18n-en-us gnome-keyring gwenview icoutils kaccounts-integration kate kcalc kdeconnect kdegraphics-mobipocket kdegraphics-thumbnailers kdialog keditbookmarks kio-admin kio-extras kio-fuse konsole ksshaskpass orca partitionmanager plymouth-kcm phonon-qt6-vlc plasma-meta vlc yt-dlp
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm ark breeze5 dolphin dolphin-plugins ffmpegthumbs firefox firefox-i18n-en-us gnome-keyring gwenview icoutils kaccounts-integration kate kcalc kdeconnect kdegraphics-mobipocket kdegraphics-thumbnailers kdialog keditbookmarks kio-admin kio-extras kio-fuse konsole ksshaskpass okular orca partitionmanager plymouth-kcm phonon-qt6-vlc plasma-meta vlc yt-dlp
 
     # Enable Plasma Login
     arch-chroot "$CHROOT_DIR" systemctl enable plasmalogin.service
@@ -590,7 +595,7 @@ setup_printing_support() {
     arch-chroot "$CHROOT_DIR" pacman -Sy
 
     # Install Printing Packages
-    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm cups cups-browsed system-config-printer
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm cups cups-browsed sane-airscan simple-scan system-config-printer
 
     # Enable printing services
     arch-chroot "$CHROOT_DIR" systemctl enable cups.service
@@ -609,20 +614,11 @@ setup_pro_audio() {
     # Update System
     arch-chroot "$CHROOT_DIR" pacman -Sy
 
-    # Force remove jack2 package
-    arch-chroot "$CHROOT_DIR" pacman -Rdd --noconfirm jack2
-
-    # Force remove jack2 package (32-bit)
-    arch-chroot "$CHROOT_DIR" pacman -Rdd --noconfirm lib32-jack2
-
     # Install Pro Audio Packages
-    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm carla irqbalance pipewire-jack qpwgraph reapack reaper sws realtime-privileges
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm carla qpwgraph reapack reaper sws realtime-privileges
 
     # Install Pro Audio Packages (32-bit)
     arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-pipewire-jack
-
-    # Performance & Audio
-    arch-chroot "$CHROOT_DIR" systemctl enable irqbalance.service
 
     # Add users to the appropriate groups
     arch-chroot "$CHROOT_DIR" gpasswd -a $USERNAME realtime
@@ -675,6 +671,7 @@ if [[ "$USER" == "root" ]]; then
         clear
         setup_archlinux
         setup_chaotic_aur
+        install_kernel
         configure_pacman_makepkg
         generate_fstab
         zram_disk
