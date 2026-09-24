@@ -467,10 +467,10 @@ setup_base() {
     arch-chroot "$CHROOT_DIR" pacman -Sy
 
     # Install Pipewire JACK module
-    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm pipewire-jack
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm pipewire-jack pipewire-netjack2
 
     # Install Pipewire JACK module (32-bit)
-    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-pipewire-jack
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm lib32-pipewire-jack lib32-pipewire-netjack2
 
     # Install System Packages
     arch-chroot "$CHROOT_DIR" pacman -S --noconfirm 7zip bash-completion bluez bluez-cups bluez-hid2hci bluez-libs bluez-obex bluez-utils exfatprogs ffmpeg flatpak fwupd gst-libav gst-plugin-pipewire gst-plugins-bad gst-plugins-bad-libs gst-plugins-base gst-plugins-base-libs gst-plugins-espeak gst-plugins-good gst-plugins-ugly ifuse iproute2 irqbalance libcurl-compat libcurl-gnutls libdvdcss libgpod lsb-release networkmanager networkmanager-vpn-plugin-openvpn noto-fonts noto-fonts-cjk noto-fonts-emoji ntfs-3g openssh pipewire-alsa pipewire-audio pipewire-ffado pipewire-libcamera pipewire-pulse pipewire-session-manager pipewire-v4l2 power-profiles-daemon unrar unzip wiremix vi vim zip
@@ -576,7 +576,7 @@ setup_plasma_desktop() {
     arch-chroot "$CHROOT_DIR" pacman -Sy
 
     # Install Plasma Packages
-    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm ark breeze5 dolphin dolphin-plugins ffmpegthumbs firefox firefox-i18n-en-us gnome-keyring gwenview icoutils kaccounts-integration kate kcalc kdeconnect kdegraphics-mobipocket kdegraphics-thumbnailers kdialog keditbookmarks kio-admin kio-extras kio-fuse konsole ksshaskpass okular orca partitionmanager plymouth-kcm phonon-qt6-vlc plasma-meta vlc yt-dlp
+    arch-chroot "$CHROOT_DIR" pacman -S --noconfirm ark breeze5 dolphin dolphin-plugins ffmpegthumbs firefox firefox-i18n-en-us gnome-keyring gwenview haruna icoutils kaccounts-integration kate kcalc kdeconnect kdegraphics-mobipocket kdegraphics-thumbnailers kdialog keditbookmarks kio-admin kio-extras kio-fuse konsole ksshaskpass okular orca partitionmanager plymouth-kcm phonon-qt6-vlc plasma-meta yt-dlp
 
     # Enable Plasma Login
     arch-chroot "$CHROOT_DIR" systemctl enable plasmalogin.service
